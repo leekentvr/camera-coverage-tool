@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>カメラ視野チェッカー — リフレッシュスペース3F</title>
+<style>
+  :root {
+    --bg: #f3f5f7; --panel: #ffffff; --ink: #1b2127; --muted: #5d6874; --line: #d8dee5;
+    --accent: #0072B2; --overlap: #e0001b; --corridor: #d98a00; --r: 10px;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: light; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif; }
+  header.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 20px 4px; }
+  h1 { margin: 0; font-size: 19px; font-weight: 700; }
+  h1 .sub { font-weight: 500; color: var(--muted); margin-left: 10px; font-size: 14px; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .lang button { border: 0; border-radius: 0; padding: 5px 12px; background: #fff; }
+  .lang button.on { background: var(--accent); color: #fff; font-weight: 700; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 6px 11px; cursor: pointer; }
+  button:hover { border-color: #aab4be; background: #f6f8fa; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover { background: #00659d; }
+  .lang button:hover { background: #eef3f7; } .lang button.on:hover { background: var(--accent); }
+
+  .cambar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 20px 0; }
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tab { display: flex; align-items: center; gap: 7px; padding: 5px 5px 5px 10px; font-weight: 600; }
+  .tab.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,114,178,.18); background: #f2f8fc; }
+  .tab .x { margin-left: 2px; padding: 0 6px; border-radius: 5px; color: var(--muted); font-weight: 400; line-height: 1.25; }
+  .tab .x:hover { background: #e3e9ef; color: var(--ink); }
+  .chip { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 12px; flex: none; }
+  .camtile { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border: 2px dashed #8fa0b0; border-radius: 9px;
+             background: #f9fbfc; cursor: grab; user-select: none; font-weight: 600; }
+  .camtile:hover { border-color: var(--accent); background: #f2f8fc; }
+  .camtile:active { cursor: grabbing; }
+  .hint { color: var(--muted); font-size: 12.5px; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; padding: 10px 20px 8px; align-items: start; }
+  @media (max-width: 1050px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 11px 14px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  canvas { display: block; width: 100%; }
+  #plan { touch-action: none; border-radius: 8px; background: #fff; }
+  #view { border-radius: 8px; background: #1b2127; }
+  .readout { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .planhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .planhead h2 { margin: 0; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .seg label { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 3px 9px; cursor: pointer; font-size: 13px; }
+  .seg label:has(input:checked) { border-color: var(--accent); background: #f2f8fc; font-weight: 700; }
+  .seg .lead { color: var(--muted); font-size: 12.5px; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 8px 0 6px; }
+  .stat { border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; line-height: 1.2; min-width: 0; }
+  .stat b { font-size: 13px; display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+  .stat b i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; flex: none; }
+  .stat small { display: block; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .legend { display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--muted); font-size: 11.5px; }
+  .legend i { display: inline-block; width: 12px; height: 9px; margin-right: 4px; border-radius: 2px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.2); }
+  details.opts { margin-top: 9px; border-top: 1px solid var(--line); padding-top: 7px; }
+  details.opts summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--muted); }
+  details.opts label.chk { display: flex; gap: 8px; align-items: center; margin: 6px 0 0; font-size: 13px; }
+  details.opts .numrow { margin-top: 8px; }
+
+  .ctlgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; }
+  .ctlgrid label.num { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+  .ctlgrid label.num input, .numrow input { width: 92px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  .sl label { display: flex; justify-content: space-between; font-size: 13px; }
+  .sl output { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sl input[type=range] { width: 100%; margin: 2px 0 0; }
+  .numrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; }
+
+  table.pp { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }
+  table.pp td { padding: 4px 6px; border-top: 1px solid var(--line); }
+  table.pp td:last-child { text-align: right; color: var(--muted); }
+  .ok { color: #0a7a4b; font-weight: 600; } .no { color: #b3261e; font-weight: 600; } .part { color: #a35f00; font-weight: 600; }
+
+  footer.foot { padding: 2px 20px 22px; color: #6b7581; font-size: 11.5px; line-height: 1.55; max-width: 1400px; }
+  .toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: #1b2127; color: #fff;
+           padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.on { opacity: .95; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1><span data-i18n="title"></span><span class="sub" data-i18n="subtitle"></span></h1>
+  <div class="actions">
+    <div class="lang" role="group" aria-label="Language / 言語"><button id="langJa" data-lang="ja">日本語</button><button id="langEn" data-lang="en">English</button></div>
+    <button class="primary" id="save" data-i18n="save"></button>
+    <button id="copy" data-i18n="copy"></button>
+  </div>
+</header>
+
+<div class="cambar">
+  <div class="tabs" id="tabs"></div>
+  <div class="camtile" id="tile" draggable="true" data-i18n-title="tileTitle">
+    <svg width="26" height="20" viewBox="0 0 26 20" aria-hidden="true"><rect x="1" y="4" width="17" height="12" rx="2.5" fill="#33414e"/><path d="M18 8.5l7-3.5v10l-7-3.5z" fill="#33414e"/><circle cx="9.5" cy="10" r="3" fill="#fff"/></svg>
+    <span data-i18n="tileLabel"></span>
+  </div>
+  <button id="reset" data-i18n="reset"></button>
+  <span class="hint" data-i18n="hint"></span>
+</div>
+
+<main>
+  <section>
+    <div class="card">
+      <h2 data-i18n="viewTitle"></h2>
+      <canvas id="view"></canvas>
+      <div class="readout" data-i18n="viewKey"></div>
+    </div>
+
+    <div class="card" id="ctl">
+      <h2 id="ctlTitle"></h2>
+      <div class="ctlgrid">
+        <label class="num"><span data-i18n="fx"></span><input id="fx" type="number" step="0.1"></label>
+        <label class="num"><span data-i18n="fy"></span><input id="fy" type="number" step="0.1"></label>
+        <div class="sl"><label for="fh"><span data-i18n="fh"></span><output id="oh"></output></label><input id="fh" type="range" min="1.5" max="4" step="0.1"></div>
+        <div class="sl"><label for="fyaw"><span data-i18n="fyaw"></span><output id="oyaw"></output></label><input id="fyaw" type="range" min="0" max="359" step="1"></div>
+        <div class="sl"><label for="fpitch"><span data-i18n="fpitch"></span><output id="opitch"></output></label><input id="fpitch" type="range" min="0" max="85" step="1"></div>
+        <div class="sl"><label for="fzoom"><span data-i18n="fzoom"></span><output id="ozoom"></output></label><input id="fzoom" type="range" min="1" max="2" step="0.1"></div>
+      </div>
+      <div class="readout" id="camReadout"></div>
+      <div class="readout" data-i18n="ctlHint"></div>
+    </div>
+
+    <div class="card">
+      <h2 data-i18n="personTitle"></h2>
+      <div class="seg">
+        <label><input type="radio" name="posture" value="sitting" checked><span data-i18n="sitting"></span></label>
+        <label><input type="radio" name="posture" value="standing"><span data-i18n="standing"></span></label>
+        <span class="lead" data-i18n="pinHint"></span>
+      </div>
+      <table class="pp" id="pp"></table>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <div class="planhead">
+        <h2 data-i18n="planTitle"></h2>
+        <div class="seg">
+          <span class="lead" data-i18n="coverageAt"></span>
+          <label><input type="radio" name="plane" value="0"><span data-i18n="planeFloor"></span></label>
+          <label><input type="radio" name="plane" value="1050" checked><span data-i18n="planeSeated"></span></label>
+          <label><input type="radio" name="plane" value="1400"><span data-i18n="planeStanding"></span></label>
+        </div>
+      </div>
+      <canvas id="plan"></canvas>
+      <div class="stats" id="stats"></div>
+      <div class="legend" id="legend"></div>
+      <details class="opts">
+        <summary data-i18n="optTitle"></summary>
+        <label class="chk"><input type="checkbox" id="oSolid" checked><span data-i18n="optSolid"></span></label>
+        <label class="chk"><input type="checkbox" id="oGaps" checked><span data-i18n="optGaps"></span></label>
+        <label class="chk"><input type="checkbox" id="oSnap" checked><span data-i18n="optSnap"></span></label>
+        <div class="numrow"><span data-i18n="optWall"></span><input id="fwall" type="number" step="0.1" min="2" max="5" value="2.7"></div>
+      </details>
+    </div>
+  </aside>
+</main>
+
+<footer class="foot" id="foot"></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+'use strict';
+const D2R = Math.PI / 180;
+
+// =====================================================================================================
+// Words. Japanese first; English by the toggle. Add a key to both tables when adding any text.
+// =====================================================================================================
+const I18N = {
+  ja: {
+    docTitle: 'カメラ視野チェッカー — リフレッシュスペース3F', title: 'カメラ視野チェッカー', subtitle: 'リフレッシュスペース・3階',
+    save: '画像を保存', copy: '位置をコピー', reset: '提案位置に戻す',
+    tileLabel: 'カメラを平面図へドラッグ', tileTitle: 'ドラッグで平面図に配置（クリックでも追加できます）',
+    hint: '配置 → 丸をドラッグで移動、白いリングで向きを調整 → 左の映像で見え方を確認',
+    viewTitle: '選択中のカメラに映るもの',
+    viewKey: '緑＝床の1mグリッド／黄褐色＝テーブル／青＝ブース／灰＝壁・ソファ・固定什器／琥珀色＝廊下の床／橙＝Pピンの人',
+    planTitle: '平面図（真上から）', coverageAt: '視野を見る高さ',
+    planeFloor: '床面', planeSeated: '座位の胸', planeStanding: '立位の胸',
+    ctlTitle: n => `CAM ${n}：位置と向き`, ctlNone: 'カメラが選択されていません',
+    fx: '5通りから (m)', fy: 'C通り壁から (m)', fh: '取付高さ', fyaw: '向き', fpitch: '下向き角', fzoom: 'ズーム',
+    ctlHint: '向き 90°＝室内へ真っ直ぐ／下向き角 0°＝水平、90°＝真下／ズームはソフトウェアズーム（範囲は非公開）',
+    camReadout: (h, v, a) => `視野：横${h}°×縦${v}°。この高さで室内の ${a} m² を撮影。`,
+    personTitle: 'テスト位置（Pピン）', sitting: '座っている人', standing: '立っている人',
+    pinHint: '平面図の黒い「P」をドラッグして位置を試せます',
+    resIn: '視野内', resOut: '視野外', resPart: '一部見切れ', dist: d => `${d} m先`, tall: p => `高さ ${p}px`, noCams: 'カメラを追加してください',
+    stat1: '1台で見える', stat2: '2台以上（重複）', stat3: '見えない', stat4: '廊下が映る',
+    legTable: 'テーブル', legBooth: 'ブース', legOther: 'ソファ・固定什器', legWall: '壁・柱', legOpen: '壁なし（廊下に開放）',
+    optTitle: 'オプション', optSolid: '壁と家具が視界をさえぎる', optGaps: '見えない範囲を表示',
+    optSnap: 'C通り壁の近くにドロップしたら壁に吸着', optWall: '壁の高さ (m)',
+    cvCorridor: '廊下', cvOpen: '壁なし：廊下に開放', cvWall: 'C通り壁（窓）',
+    tSaved: '画像を保存しました', tCopied: '位置をコピーしました', tReset: '提案位置に戻しました', tMax: 'カメラは8台までです',
+    remove: '削除',
+    bay: x => x < 0 ? '5通りより西' : x > 18000 ? '8通りより東' : `${5 + Math.min(2, Math.floor(x / 6000))}〜${6 + Math.min(2, Math.floor(x / 6000))}通り間`,
+    describe: c => `CAM ${c.n}：5通りから${(c.x / 1000).toFixed(1)}m（${I18N.ja.bay(c.x)}）／C通りから${(c.y / 1000).toFixed(2)}m／高さ${(c.h / 1000).toFixed(1)}m／向き${Math.round(c.yaw)}°／下向き${Math.round(c.pitch)}°／ズーム${c.zoom.toFixed(1)}`,
+    foot: '縮尺：図面上で柱の間隔が6.0m（A3で1/100）になっていることから算出しています。5通りと6通りの柱芯間をメジャーで測って確認してください。壁・テーブル・ブースは図面から読み取った値で、誤差は約±0.2mです。カメラの高さと壁の高さ（2.7m）は図面に無いため仮定です。レンズ：Logitech C922（メーカー公称：対角78°・水平70.42°・垂直43.3°）を1920×1080の映像として計算しており、実機での実測はまだ行っていません。壁と家具は視界をさえぎるものとして扱い、人は座位・立位とも胸の高さで判定しています。',
+  },
+  en: {
+    docTitle: 'Camera coverage — Refresh Space 3F', title: 'Camera coverage', subtitle: 'Refresh Space · 3F',
+    save: 'Save picture', copy: 'Copy positions', reset: 'Reset to proposed',
+    tileLabel: 'Drag a camera onto the plan', tileTitle: 'Drag onto the plan to place it (or click to add)',
+    hint: 'Place it, move it by its dot, turn it with the white ring, then check the view on the left',
+    viewTitle: 'What the selected camera sees',
+    viewKey: 'Green: 1 m floor grid · tan: tables · blue: booths · grey: walls, sofa, fixed units · amber: corridor floor · orange: the person pin',
+    planTitle: 'Floor plan (top-down)', coverageAt: 'Coverage shown at',
+    planeFloor: 'Floor', planeSeated: 'Seated chest', planeStanding: 'Standing chest',
+    ctlTitle: n => `CAM ${n}: position and aim`, ctlNone: 'No camera selected',
+    fx: 'From column 5 (m)', fy: 'From C-line wall (m)', fh: 'Mounting height', fyaw: 'Direction', fpitch: 'Tilt down', fzoom: 'Zoom',
+    ctlHint: 'Direction 90° = straight across the room · Tilt 0° = level, 90° = straight down · Zoom is software zoom (range not published)',
+    camReadout: (h, v, a) => `Sees ${h}° wide × ${v}° tall; ${a} m² of the room at this height.`,
+    personTitle: 'Test spot (P pin)', sitting: 'Seated person', standing: 'Standing person',
+    pinHint: 'Drag the black “P” on the plan to test a spot',
+    resIn: 'in view', resOut: 'out of view', resPart: 'partly cut off', dist: d => `${d} m away`, tall: p => `${p} px tall`, noCams: 'Add a camera to test the pin',
+    stat1: 'One camera', stat2: 'Two or more', stat3: 'Not seen', stat4: 'Corridor in view',
+    legTable: 'Table', legBooth: 'Booth', legOther: 'Sofa / fixed units', legWall: 'Wall / column', legOpen: 'Open to corridor',
+    optTitle: 'Options', optSolid: 'Walls and furniture block the view', optGaps: 'Show gaps',
+    optSnap: 'Snap to the C-line wall when dropped near it', optWall: 'Wall height (m)',
+    cvCorridor: 'CORRIDOR', cvOpen: 'no wall here: open to the corridor', cvWall: 'C-line wall (windows)',
+    tSaved: 'Picture saved', tCopied: 'Positions copied', tReset: 'Back to the proposed positions', tMax: 'Eight cameras is the limit here',
+    remove: 'Remove',
+    bay: x => x < 0 ? 'west of column 5' : x > 18000 ? 'east of column 8' : `bay ${5 + Math.min(2, Math.floor(x / 6000))}–${6 + Math.min(2, Math.floor(x / 6000))}`,
+    describe: c => `CAM ${c.n}: ${(c.x / 1000).toFixed(1)} m from column 5 (${I18N.en.bay(c.x)}) · ${(c.y / 1000).toFixed(2)} m out from the C line · height ${(c.h / 1000).toFixed(1)} m · facing ${Math.round(c.yaw)}° · tilt ${Math.round(c.pitch)}° down · zoom ${c.zoom.toFixed(1)}`,
+    foot: 'Scale comes from the drawing, where the columns are 6.0 m apart (1/100 on A3). Tape one bay, column centre to column centre, to confirm. Walls, tables and booths are read off the drawing to about ±0.2 m. Camera height and wall height (2.7 m) are assumptions, since a floor plan has no heights. Lens: Logitech C922 (Logitech lists 78° diagonal, 70.42° wide, 43.3° tall), used for a 1920×1080 picture; not yet measured on a real unit. Walls and furniture are treated as solid and block the view; people are judged at chest height, seated or standing.',
+  },
+};
+let lang = 'ja';
+const t = (k, ...a) => { const v = (I18N[lang] && I18N[lang][k] !== undefined) ? I18N[lang][k] : I18N.en[k]; return typeof v === 'function' ? v(...a) : v; };
+
+// =====================================================================================================
+// The room, in millimetres. Origin = centre of the 5/C column, X along the C-line wall, Y into the room.
+// Read off the 3F layout drawing (the drawing itself is not part of this tool). Columns are 6,000 mm apart.
+// =====================================================================================================
+const ROOM = { x0: 700, x1: 17800, y0: 260, y1: 6100 };       // inside faces of the walls
+const CORR_Y1 = 8000;                                          // far side of the corridor
+const WALL_Y = 260;                                            // room-side face of the C-line wall
+const NORTH_WALL_X0 = 10820;                                   // the north wall starts here; to the west the room is open to the corridor
+const COLS_X = [0, 6000, 12000, 18000], COL_NAMES = ['5', '6', '7', '8'];
+
+const rect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+const circle = (cx, cy, r) => Array.from({ length: 16 }, (_, i) => [cx + r * Math.cos(i * Math.PI / 8), cy + r * Math.sin(i * Math.PI / 8)]);
+const WALLS = [                                                // walls, full height
+  { p: rect(560, -100, 17940, 120), k: 'wall' },               // C-line wall (windows)
+  { p: rect(560, -100, 700, 6100), k: 'wall' },                // west wall
+  { p: rect(17800, -100, 17940, 6300), k: 'wall' },            // east wall
+  { p: rect(5930, 120, 6130, 6120), k: 'partition' },          // the partition between the corner and the main space
+  { p: rect(NORTH_WALL_X0, 6100, 17940, 6300), k: 'wall' },    // north wall with the whiteboard
+  ...COLS_X.map(cx => ({ p: rect(cx - 500, -240, cx + 500, 270), k: 'column' })),
+];
+const FURN = [                                                 // h = height in mm
+  { k: 'table', h: 720,  p: rect(700, 2710, 1560, 3320) },     // H720 desks
+  { k: 'table', h: 720,  p: rect(700, 1120, 1560, 1730) },
+  { k: 'table', h: 550,  p: circle(2780, 500, 375) },          // round low tables
+  { k: 'table', h: 550,  p: circle(3830, 500, 375) },
+  { k: 'table', h: 550,  p: circle(4880, 500, 375) },
+  { k: 'table', h: 620,  p: rect(4030, 3020, 4930, 5120) },    // the long table in the corner
+  { k: 'table', h: 720,  p: rect(7340, 4450, 8240, 5370) },    // AnyWay pair, north
+  { k: 'table', h: 720,  p: rect(8240, 4450, 9160, 5370) },
+  { k: 'table', h: 720,  p: rect(7380, 1160, 9480, 2200) },    // SENTIR long tables
+  { k: 'table', h: 720,  p: rect(9480, 1160, 11580, 2200) },
+  { k: 'table', h: 720,  p: rect(12420, 1960, 13320, 2850) },  // AnyWay pair, east
+  { k: 'table', h: 720,  p: rect(13320, 1960, 14220, 2850) },
+  { k: 'table', h: 1000, p: [[14188, 5264], [14924, 5406], [15168, 3944], [14431, 3802]] },   // tilted high table
+  { k: 'table', h: 1000, p: rect(12490, 120, 16070, 570) },    // counter along the windows
+  { k: 'booth', h: 2200, p: rect(16750, 4600, 17800, 5700) },  // the four WORKPODs
+  { k: 'booth', h: 2200, p: rect(16750, 3510, 17800, 4530) },
+  { k: 'booth', h: 2200, p: rect(16750, 2360, 17800, 3450) },
+  { k: 'booth', h: 2200, p: rect(16750, 1240, 17800, 2300) },
+  { k: 'other', h: 800,  p: rect(3130, 5410, 5940, 6120) },    // L-shaped sofa
+  { k: 'other', h: 800,  p: rect(5220, 3320, 5940, 5410) },
+  { k: 'other', h: 1800, p: rect(850, 4990, 1560, 6000) },     // vending machines
+  { k: 'other', h: 1800, p: rect(850, 3900, 1560, 4900) },
+  { k: 'other', h: 2000, p: rect(6130, 4460, 6560, 6120) },    // storage units against the partition
+  { k: 'other', h: 2000, p: rect(6130, 260, 6560, 1930) },
+];
+// plan colours: fill / outline.  view colours: base RGB
+const PLAN_STYLE = { table: ['#efd9a8', '#b08d4a'], booth: ['#bcd9ee', '#4f86ad'], other: ['#dde2e8', '#9aa6b2'] };
+const VIEW_RGB = { wall: [201, 209, 217], partition: [166, 178, 190], column: [112, 122, 134], table: [218, 181, 108], booth: [128, 183, 228], other: [156, 168, 180], person: [255, 159, 28] };
+
+const PALETTE = ['#0072B2', '#D55E00', '#009E73', '#7B3FA0', '#B08900', '#2AA7C9', '#6B6B6B', '#A0522D'];
+const CHEST = { sitting: 1050, standing: 1400 }, BODY = { sitting: 1200, standing: 1700 };
+const AIM_MM = 1500, CELL = 100;
+
+// lens: Logitech lists 78 deg DIAGONAL (70.42 x 43.3 at 16:9)
+const TAN_D = Math.tan(39 * D2R), DIAG = Math.hypot(16, 9);
+const TAN_H0 = TAN_D * 16 / DIAG, TAN_V0 = TAN_D * 9 / DIAG;
+
+const PROPOSED = () => [
+  { n: 1, x: 3000,  y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
+  { n: 2, x: 9000,  y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
+  { n: 3, x: 15000, y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
+];
+let cams = PROPOSED(), selN = 1;
+let person = { x: 9000, y: 3200 };
+const S = { plane: 1050, posture: 'sitting', solid: true, showGaps: true, snap: true, wallH: 2700 };
+
+try {
+  const saved = JSON.parse(localStorage.getItem('cameraCoverage.v1') || 'null');
+  if (saved) {
+    if (Array.isArray(saved.cams) && saved.cams.length) { cams = saved.cams; selN = saved.selN || cams[0].n; person = saved.person || person; Object.assign(S, saved.S || {}); }
+    if (saved.lang === 'ja' || saved.lang === 'en') lang = saved.lang;
+  }
+} catch (e) { /* storage may be blocked; everything still works */ }
+try { const q = new URLSearchParams(location.search).get('lang'); if (q === 'ja' || q === 'en') lang = q; } catch (e) {}
+const save = () => { try { localStorage.setItem('cameraCoverage.v1', JSON.stringify({ cams, selN, person, S, lang })); } catch (e) {} };
+
+const $ = id => document.getElementById(id);
+const sel = () => cams.find(c => c.n === selN) || null;
+const colourOf = c => PALETTE[(c.n - 1) % PALETTE.length];
+const rgbOf = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+
+// =====================================================================================================
+// Solid objects: every wall, column and piece of furniture is a convex prism. They block the view
+// (coverage) and are drawn as solid surfaces (camera view).
+// =====================================================================================================
+const ccw = p => { let a = 0; for (let i = 0; i < p.length; i++) { const q = p[(i + 1) % p.length]; a += p[i][0] * q[1] - q[0] * p[i][1]; } return a > 0 ? p : p.slice().reverse(); };
+const bbox = p => ({ x0: Math.min(...p.map(q => q[0])), x1: Math.max(...p.map(q => q[0])), y0: Math.min(...p.map(q => q[1])), y1: Math.max(...p.map(q => q[1])) });
+let SOL = [];
+function buildSolids() {
+  SOL = [];
+  WALLS.forEach(w => SOL.push({ poly: ccw(w.p), z0: 0, z1: S.wallH, k: w.k }));
+  FURN.forEach(f => SOL.push({ poly: ccw(f.p), z0: 0, z1: f.h, k: f.k }));
+  SOL.forEach(s => { s.bb = bbox(s.poly); });
+}
+const inConvex = (p, x, y) => { for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; if ((b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]) < 0) return false; } return true; };
+function segPoly(p, ax, ay, bx, by) {                          // Cyrus-Beck: the part of segment A->B inside a convex CCW polygon
+  let t0 = 0, t1 = 1; const dx = bx - ax, dy = by - ay;
+  for (let i = 0; i < p.length; i++) {
+    const a = p[i], b = p[(i + 1) % p.length], ex = b[0] - a[0], ey = b[1] - a[1];
+    const num = ex * (ay - a[1]) - ey * (ax - a[0]), den = ex * dy - ey * dx;
+    if (den === 0) { if (num < 0) return null; continue; }
+    const q = -num / den;
+    if (den > 0) { if (q > t0) t0 = q; } else if (q < t1) t1 = q;
+    if (t0 > t1) return null;
+  }
+  return [t0, t1];
+}
+function segHitsBox(ax, ay, bx, by, r) {                       // quick reject: does the segment touch this bounding box?
+  let t0 = 0, t1 = 1; const dx = bx - ax, dy = by - ay;
+  const p = [-dx, dx, -dy, dy], q = [ax - r.x0, r.x1 - ax, ay - r.y0, r.y1 - ay];
+  for (let i = 0; i < 4; i++) {
+    if (p[i] === 0) { if (q[i] < 0) return false; continue; }
+    const t = q[i] / p[i];
+    if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
+  }
+  return true;
+}
+const inBox = (x, y, r) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1;
+const solidAt = (x, y, z) => SOL.some(s => s.z1 > z && inBox(x, y, s.bb) && inConvex(s.poly, x, y));   // a point inside an object is not floor
+function blocked(c, tx, ty, tz) {                              // does any solid object stand between the camera and this point?
+  for (const s of SOL) {
+    if (!segHitsBox(c.x, c.y, tx, ty, s.bb)) continue;
+    if (inBox(c.x, c.y, s.bb) && inConvex(s.poly, c.x, c.y)) continue;
+    const iv = segPoly(s.poly, c.x, c.y, tx, ty); if (!iv) continue;
+    const za = c.h + (tz - c.h) * iv[0], zb = c.h + (tz - c.h) * iv[1];
+    if (Math.min(za, zb) < s.z1 - 1 && Math.max(za, zb) > s.z0) return true;
+  }
+  return false;
+}
+
+// =====================================================================================================
+// Camera geometry
+// =====================================================================================================
+function prep(c) {
+  const y = c.yaw * D2R, p = c.pitch * D2R;
+  c.f = [Math.cos(p) * Math.cos(y), Math.cos(p) * Math.sin(y), -Math.sin(p)];
+  c.r = [Math.sin(y), -Math.cos(y), 0];
+  c.u = [Math.sin(p) * Math.cos(y), Math.sin(p) * Math.sin(y), Math.cos(p)];
+  c.tanH = TAN_H0 / c.zoom; c.tanV = TAN_V0 / c.zoom;
+}
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const toCam = (c, x, y, z) => { const d = [x - c.x, y - c.y, z - c.h]; return [dot(d, c.r), dot(d, c.u), dot(d, c.f)]; };
+function inFrame(c, x, y, z) {
+  const q = toCam(c, x, y, z);
+  return q[2] > 50 && Math.abs(q[0]) <= q[2] * c.tanH && Math.abs(q[1]) <= q[2] * c.tanV;
+}
+const sees = (c, x, y, z) => inFrame(c, x, y, z) && !(S.solid && blocked(c, x, y, z));
+
+// =====================================================================================================
+// Coverage on a grid of 100 mm cells: the room, plus the corridor strip beyond its open edge
+// =====================================================================================================
+const GC = Math.ceil((ROOM.x1 - ROOM.x0) / CELL), GR = Math.ceil((CORR_Y1 - ROOM.y0) / CELL);
+const covCanvas = document.createElement('canvas'); covCanvas.width = GC; covCanvas.height = GR;
+const covCtx = covCanvas.getContext('2d');
+function computeCoverage(step = 1) {                           // step 2 = 200 mm cells, used while dragging
+  const counts = new Uint8Array(GC * GR), owner = new Int16Array(GC * GR).fill(-1), kind = new Uint8Array(GC * GR);   // kind 0 room, 1 corridor, 2 not floor
+  const per = cams.map(() => 0);
+  let total = 0, c0 = 0, c1 = 0, c2 = 0, spill = 0;
+  for (let j0 = 0; j0 < GR; j0 += step) for (let i0 = 0; i0 < GC; i0 += step) {
+    const x = ROOM.x0 + (i0 + step / 2) * CELL, y = CORR_Y1 - (j0 + step / 2) * CELL;
+    let kd = 0, n = 0, own = -1; const seen = [];
+    if (y < ROOM.y0 || solidAt(x, y, S.plane)) kd = 2;
+    else {
+      kd = y > ROOM.y1 ? 1 : 0;
+      for (let m = 0; m < cams.length; m++) if (sees(cams[m], x, y, S.plane)) { n++; own = m; seen.push(m); }
+    }
+    const jm = Math.min(GR, j0 + step), im = Math.min(GC, i0 + step), cnt = (jm - j0) * (im - i0);
+    for (let j = j0; j < jm; j++) for (let i = i0; i < im; i++) { const k = j * GC + i; kind[k] = kd; counts[k] = n; owner[k] = own; }
+    if (kd === 2) continue;
+    if (kd === 1) { if (n > 0) spill += cnt; continue; }
+    total += cnt; if (n === 0) c0 += cnt; else if (n === 1) c1 += cnt; else c2 += cnt;
+    seen.forEach(m => { per[m] += cnt; });
+  }
+  return { counts, owner, kind, per, total, c0, c1, c2, spill };
+}
+
+// =====================================================================================================
+// The floor plan: a simple vector drawing
+// =====================================================================================================
+const VB = { x0: -1300, x1: 19000, y0: -1500, y1: 8300 };
+const planCv = $('plan'), pctx = planCv.getContext('2d');
+let cssW = 600, cssH = 290, k = 1, dpr = 1;
+const X = x => (x - VB.x0) * k, Y = y => (VB.y1 - y) * k;
+const mmX = px => px / k + VB.x0, mmY = py => VB.y1 - py / k;
+function sizePlan() {
+  const wrap = planCv.parentElement; cssW = wrap.clientWidth - 28 > 200 ? wrap.clientWidth - 28 : 600;
+  k = cssW / (VB.x1 - VB.x0); cssH = Math.round((VB.y1 - VB.y0) * k);
+  dpr = window.devicePixelRatio || 1;
+  planCv.width = Math.round(cssW * dpr); planCv.height = Math.round(cssH * dpr); planCv.style.height = cssH + 'px';
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function poly(ctx, p, fill, stroke, lw) {
+  ctx.beginPath(); p.forEach((q, i) => i ? ctx.lineTo(X(q[0]), Y(q[1])) : ctx.moveTo(X(q[0]), Y(q[1]))); ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); } if (stroke) { ctx.lineWidth = lw || 1; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function dimLine(ctx, x0, y0, x1, y1, label, vertical) {
+  ctx.strokeStyle = '#59636e'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(x0), Y(y0)); ctx.lineTo(X(x1), Y(y1)); ctx.stroke();
+  [[x0, y0], [x1, y1]].forEach(([x, y]) => { ctx.beginPath(); if (vertical) { ctx.moveTo(X(x) - 4, Y(y)); ctx.lineTo(X(x) + 4, Y(y)); } else { ctx.moveTo(X(x), Y(y) - 4); ctx.lineTo(X(x), Y(y) + 4); } ctx.stroke(); });
+  ctx.save(); ctx.font = '600 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const mx = X((x0 + x1) / 2), my = Y((y0 + y1) / 2);
+  if (vertical) { ctx.translate(mx - 9, my); ctx.rotate(-Math.PI / 2); ctx.fillStyle = '#39424c'; ctx.fillText(label, 0, 0); }
+  else { const w = ctx.measureText(label).width + 8; ctx.fillStyle = '#fff'; ctx.fillRect(mx - w / 2, my - 7, w, 14); ctx.fillStyle = '#39424c'; ctx.fillText(label, mx, my + .5); }
+  ctx.restore();
+}
+function drawPlan(cov) {
+  const c = pctx;
+  c.clearRect(0, 0, cssW, cssH); c.fillStyle = '#fff'; c.fillRect(0, 0, cssW, cssH);
+  poly(c, rect(ROOM.x0, ROOM.y0 - 140, ROOM.x1, ROOM.y1), '#fbfaf6', null);
+  poly(c, rect(ROOM.x0, ROOM.y1, ROOM.x1 + 140, CORR_Y1), '#f1efe8', null);
+  c.strokeStyle = '#b9b5a8'; c.lineWidth = 1; c.beginPath(); c.moveTo(X(ROOM.x0), Y(CORR_Y1)); c.lineTo(X(ROOM.x1 + 140), Y(CORR_Y1)); c.stroke();
+  c.fillStyle = '#8b8778'; c.font = '600 11px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(t('cvCorridor'), X(5000), Y(7500));
+  FURN.forEach(f => poly(c, f.p, PLAN_STYLE[f.k][0], PLAN_STYLE[f.k][1], 1));
+  WALLS.forEach(w => poly(c, w.p, w.k === 'column' ? '#111' : '#2f3a45', null));
+  c.save(); c.setLineDash([6, 4]); c.strokeStyle = '#2f3a45'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(X(ROOM.x0), Y(ROOM.y1)); c.lineTo(X(NORTH_WALL_X0), Y(ROOM.y1)); c.stroke(); c.restore();
+  c.fillStyle = '#6a6455'; c.font = '11px system-ui, sans-serif'; c.fillText(t('cvOpen'), X(5800), Y(ROOM.y1 + 330));
+  // coverage tint
+  const img = covCtx.createImageData(GC, GR), d = img.data, rgbs = cams.map(cm => rgbOf(colourOf(cm)));
+  for (let q = 0; q < GC * GR; q++) {
+    const n = cov.counts[q], i = q % GC, j = (q / GC) | 0; let r = 0, g = 0, b = 0, a = 0;
+    if (cov.kind[q] === 1) { if (n > 0) { r = 217; g = 138; b = 0; a = 140; } }
+    else if (cov.kind[q] === 0) {
+      if (n === 0) { if (S.showGaps) { r = 70; g = 80; b = 95; a = ((i + j) % 3 === 0) ? 80 : 18; } }
+      else if (n === 1) { const qq = rgbs[cov.owner[q]]; r = qq[0]; g = qq[1]; b = qq[2]; a = 105; }
+      else { r = 224; g = 0; b = 27; a = ((i + j) & 1) ? 200 : 120; }
+    }
+    d[q * 4] = r; d[q * 4 + 1] = g; d[q * 4 + 2] = b; d[q * 4 + 3] = a;
+  }
+  covCtx.putImageData(img, 0, 0);
+  c.imageSmoothingEnabled = false; c.drawImage(covCanvas, X(ROOM.x0), Y(CORR_Y1), GC * CELL * k, GR * CELL * k); c.imageSmoothingEnabled = true;
+  // dimensions, grid numbers
+  for (let i = 0; i < 3; i++) dimLine(c, COLS_X[i], -620, COLS_X[i + 1], -620, '6.0 m', false);
+  dimLine(c, -760, ROOM.y0, -760, ROOM.y1, (Math.round((ROOM.y1 - ROOM.y0) / 100) / 10).toFixed(1) + ' m', true);
+  dimLine(c, 16000, -1180, 17000, -1180, '1 m', false);
+  c.font = '700 11px system-ui, sans-serif'; c.textAlign = 'center';
+  COLS_X.forEach((gx, i) => {
+    const cx = X(gx), cy = Y(-1180);
+    c.beginPath(); c.arc(cx, cy, 9, 0, 7); c.fillStyle = '#fff'; c.fill(); c.lineWidth = 1; c.strokeStyle = '#222'; c.stroke();
+    c.fillStyle = '#222'; c.fillText(COL_NAMES[i], cx, cy + .5);
+  });
+  c.fillStyle = '#59636e'; c.font = '11px system-ui, sans-serif'; c.textAlign = 'left'; c.fillText(t('cvWall'), X(1500), Y(-1180));
+  // cameras and the person pin
+  c.textAlign = 'center';
+  cams.forEach(cm => {
+    const col = colourOf(cm), cx = X(cm.x), cy = Y(cm.y), a = cm.yaw * D2R;
+    const tx = X(cm.x + Math.cos(a) * AIM_MM), ty = Y(cm.y + Math.sin(a) * AIM_MM);
+    c.strokeStyle = col; c.lineWidth = 3; c.beginPath(); c.moveTo(cx, cy); c.lineTo(tx, ty); c.stroke();
+    const ang = Math.atan2(ty - cy, tx - cx);
+    c.fillStyle = col; c.beginPath(); c.moveTo(tx, ty);
+    c.lineTo(tx - 10 * Math.cos(ang - .4), ty - 10 * Math.sin(ang - .4)); c.lineTo(tx - 10 * Math.cos(ang + .4), ty - 10 * Math.sin(ang + .4)); c.fill();
+    c.beginPath(); c.arc(cx, cy, 11, 0, 7); c.fillStyle = col; c.fill();
+    c.lineWidth = cm.n === selN ? 3 : 2; c.strokeStyle = '#fff'; c.stroke();
+    if (cm.n === selN) { c.beginPath(); c.arc(cx, cy, 14.5, 0, 7); c.lineWidth = 1.5; c.strokeStyle = col; c.stroke(); }
+    c.fillStyle = '#fff'; c.font = '700 12px system-ui, sans-serif'; c.fillText(String(cm.n), cx, cy + .5);
+    if (cm.n === selN) { c.beginPath(); c.arc(tx, ty, 7, 0, 7); c.fillStyle = '#fff'; c.fill(); c.lineWidth = 2.5; c.strokeStyle = col; c.stroke(); }
+  });
+  const px = X(person.x), py = Y(person.y);
+  c.beginPath(); c.arc(px, py, 9, 0, 7); c.fillStyle = '#111'; c.fill(); c.lineWidth = 2.5; c.strokeStyle = '#ff9f1c'; c.stroke();
+  c.fillStyle = '#fff'; c.font = '700 11px system-ui, sans-serif'; c.fillText('P', px, py + .5);
+}
+
+// =====================================================================================================
+// The camera's own view: solid walls and furniture, hidden-surface order (far to near), real lens
+// =====================================================================================================
+const viewCv = $('view'), vctx = viewCv.getContext('2d');
+const LIGHT = (() => { const v = [-0.3, -0.5, 0.8], n = Math.hypot(...v); return v.map(a => a / n); })();
+function splitLong(s, maxLen) {                                 // long straight walls are cut into pieces so near and far parts sort correctly
+  const b = s.bb, w = b.x1 - b.x0, h = b.y1 - b.y0;
+  const isBox = s.poly.length === 4 && Math.abs(w * h - Math.abs(s.poly.reduce((a, p, i) => { const q = s.poly[(i + 1) % 4]; return a + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2) < 1;
+  if (!isBox || Math.max(w, h) <= maxLen) return [s];
+  const n = Math.ceil(Math.max(w, h) / maxLen), out = [];
+  for (let i = 0; i < n; i++) {
+    const p = w >= h ? rect(b.x0 + w * i / n, b.y0, b.x0 + w * (i + 1) / n, b.y1) : rect(b.x0, b.y0 + h * i / n, b.x1, b.y0 + h * (i + 1) / n);
+    out.push({ poly: ccw(p), z0: s.z0, z1: s.z1, k: s.k, bb: bbox(p), split: true });
+  }
+  return out;
+}
+function drawView() {
+  const w = viewCv.clientWidth || 700, h = Math.round(w * 9 / 16), d = window.devicePixelRatio || 1;
+  viewCv.width = Math.round(w * d); viewCv.height = Math.round(h * d); viewCv.style.height = h + 'px';
+  vctx.setTransform(d, 0, 0, d, 0, 0);
+  vctx.fillStyle = '#1b2127'; vctx.fillRect(0, 0, w, h);
+  const c = sel();
+  vctx.textAlign = 'center'; vctx.textBaseline = 'middle';
+  if (!c) { vctx.fillStyle = '#9fb0bf'; vctx.font = '15px system-ui'; vctx.fillText(t('ctlNone'), w / 2, h / 2); return; }
+  const NEAR = 100, lw = Math.max(1, w / 700), camPos = [c.x, c.y, c.h];
+  const proj = q => [(q[0] / (q[2] * c.tanH) + 1) / 2 * w, (1 - q[1] / (q[2] * c.tanV)) / 2 * h];
+  const cs = (x, y, z) => toCam(c, x, y, z);
+  function fillPoly(pts, fill, stroke) {                        // pts in camera space; clipped to the near plane
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], ain = a[2] >= NEAR, bin = b[2] >= NEAR;
+      if (ain) out.push(a);
+      if (ain !== bin) { const q = (NEAR - a[2]) / (b[2] - a[2]); out.push([a[0] + q * (b[0] - a[0]), a[1] + q * (b[1] - a[1]), NEAR]); }
+    }
+    if (out.length < 3) return;
+    vctx.beginPath(); out.forEach((q, i) => { const p = proj(q); i ? vctx.lineTo(p[0], p[1]) : vctx.moveTo(p[0], p[1]); }); vctx.closePath();
+    if (fill) { vctx.fillStyle = fill; vctx.fill(); }
+    if (stroke) { vctx.lineWidth = lw; vctx.strokeStyle = stroke; vctx.stroke(); }
+  }
+  function seg(a, b, style, width, dash) {
+    let A = cs(a[0], a[1], a[2]), B = cs(b[0], b[1], b[2]);
+    if (A[2] < NEAR && B[2] < NEAR) return;
+    if (A[2] < NEAR) { const q = (NEAR - A[2]) / (B[2] - A[2]); A = [A[0] + q * (B[0] - A[0]), A[1] + q * (B[1] - A[1]), NEAR]; }
+    else if (B[2] < NEAR) { const q = (NEAR - B[2]) / (A[2] - B[2]); B = [B[0] + q * (A[0] - B[0]), B[1] + q * (A[1] - B[1]), NEAR]; }
+    const p = proj(A), r = proj(B);
+    vctx.setLineDash(dash || []); vctx.strokeStyle = style; vctx.lineWidth = width * lw; vctx.beginPath(); vctx.moveTo(p[0], p[1]); vctx.lineTo(r[0], r[1]); vctx.stroke(); vctx.setLineDash([]);
+  }
+  vctx.save(); vctx.beginPath(); vctx.rect(0, 0, w, h); vctx.clip();
+  // floors and their 1 m grid
+  const floor = (r, col) => fillPoly(rect(r.x0, r.y0, r.x1, r.y1).map(p => cs(p[0], p[1], 0)), col, null);
+  floor({ x0: ROOM.x0, y0: ROOM.y0, x1: ROOM.x1, y1: ROOM.y1 }, '#232b33');
+  floor({ x0: ROOM.x0, y0: ROOM.y1, x1: ROOM.x1, y1: CORR_Y1 }, '#2a2923');
+  for (let gx = Math.ceil(ROOM.x0 / 1000) * 1000; gx <= ROOM.x1; gx += 1000) {
+    seg([gx, ROOM.y0, 0], [gx, ROOM.y1, 0], 'rgba(70,200,130,.38)', 1);
+    seg([gx, ROOM.y1, 0], [gx, CORR_Y1, 0], 'rgba(245,158,11,.30)', 1);
+  }
+  for (let gy = Math.ceil(ROOM.y0 / 1000) * 1000; gy <= ROOM.y1; gy += 1000) seg([ROOM.x0, gy, 0], [ROOM.x1, gy, 0], 'rgba(70,200,130,.38)', 1);
+  for (let gy = ROOM.y1 + 900; gy <= CORR_Y1; gy += 1000) seg([ROOM.x0, gy, 0], [ROOM.x1, gy, 0], 'rgba(245,158,11,.30)', 1);
+  seg([ROOM.x0, ROOM.y1, 0], [NORTH_WALL_X0, ROOM.y1, 0], 'rgba(255,200,90,.95)', 1.8, [7, 5]);   // the open edge
+  // solid objects, farthest first
+  const solids = [];
+  SOL.forEach(s => splitLong(s, 1200).forEach(p => solids.push(p)));
+  const H = BODY[S.posture], px = person.x, py = person.y;     // the person: a body and a head
+  solids.push({ poly: ccw(rect(px - 225, py - 150, px + 225, py + 150)), z0: 0, z1: H - 260, k: 'person', bb: { x0: px - 225, x1: px + 225, y0: py - 150, y1: py + 150 } });
+  solids.push({ poly: ccw(rect(px - 105, py - 105, px + 105, py + 105)), z0: H - 260, z1: H - 20, k: 'person', bb: { x0: px - 105, x1: px + 105, y0: py - 105, y1: py + 105 } });
+  solids.forEach(s => { s.dist = (((s.bb.x0 + s.bb.x1) / 2 - c.x) ** 2 + ((s.bb.y0 + s.bb.y1) / 2 - c.y) ** 2 + ((s.z0 + s.z1) / 2 - c.h) ** 2); });
+  solids.sort((a, b) => b.dist - a.dist);
+  const shade = (rgb, n) => { const l = 0.5 + 0.5 * Math.max(0, dot(n, LIGHT)); return `rgb(${rgb[0] * l | 0},${rgb[1] * l | 0},${rgb[2] * l | 0})`; };
+  solids.forEach(s => {
+    const rgb = VIEW_RGB[s.k], edge = (s.k === 'wall' || s.k === 'partition') ? null : 'rgba(0,0,0,.4)', p = s.poly;
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], b = p[(i + 1) % p.length], ex = b[0] - a[0], ey = b[1] - a[1], len = Math.hypot(ex, ey) || 1;
+      const n = [ey / len, -ex / len, 0], mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (s.z0 + s.z1) / 2];
+      if (dot(n, [camPos[0] - mid[0], camPos[1] - mid[1], camPos[2] - mid[2]]) <= 0) continue;     // facing away
+      const fill = shade(rgb, n);
+      fillPoly([cs(a[0], a[1], s.z0), cs(b[0], b[1], s.z0), cs(b[0], b[1], s.z1), cs(a[0], a[1], s.z1)], fill, edge || fill);
+    }
+    if (c.h > s.z1) { const fill = shade(rgb, [0, 0, 1]); fillPoly(p.map(q => cs(q[0], q[1], s.z1)), fill, edge || fill); }   // the top
+  });
+  vctx.restore();
+  vctx.fillStyle = 'rgba(255,255,255,.82)'; vctx.font = '600 13px system-ui'; vctx.textAlign = 'left';
+  vctx.fillText(`CAM ${c.n} · 16:9 · ${(2 * Math.atan(c.tanH) / D2R).toFixed(0)}° × ${(2 * Math.atan(c.tanV) / D2R).toFixed(0)}°`, 10, 16);
+}
+
+// =====================================================================================================
+// Readouts and controls
+// =====================================================================================================
+const m2 = n => (n * CELL * CELL / 1e6);
+const bay = x => t('bay', x);
+function drawStats(cov) {
+  const tile = (col, v, label) => `<div class="stat"><b><i style="background:${col}"></i>${v} m²</b><small title="${label}">${label}</small></div>`;
+  $('stats').innerHTML = tile('#2a6f9b', m2(cov.c1).toFixed(1), t('stat1')) + tile('#e0001b', m2(cov.c2).toFixed(1), t('stat2')) +
+                         tile('#7b8794', m2(cov.c0).toFixed(1), t('stat3')) + tile('#d98a00', m2(cov.spill).toFixed(1), t('stat4'));
+}
+function drawLegend() {
+  const sw = (bg, label) => `<span><i style="background:${bg}"></i>${label}</span>`;
+  $('legend').innerHTML = sw('#efd9a8', t('legTable')) + sw('#bcd9ee', t('legBooth')) + sw('#dde2e8', t('legOther')) +
+    sw('#2f3a45', t('legWall')) + sw('repeating-linear-gradient(90deg,#2f3a45 0 4px,#fff 4px 7px)', t('legOpen'));
+}
+function updateReadouts(cov) {
+  const c = sel();
+  $('ctl').style.opacity = c ? 1 : .45;
+  $('ctlTitle').textContent = c ? t('ctlTitle', c.n) : t('ctlNone');
+  if (c) {
+    const i = cams.indexOf(c);
+    $('oh').textContent = (c.h / 1000).toFixed(1) + ' m'; $('oyaw').textContent = Math.round(c.yaw) + '°';
+    $('opitch').textContent = Math.round(c.pitch) + '°'; $('ozoom').textContent = c.zoom.toFixed(1) + '×';
+    $('camReadout').textContent = t('camReadout', (2 * Math.atan(c.tanH) / D2R).toFixed(0), (2 * Math.atan(c.tanV) / D2R).toFixed(0), m2(cov.per[i]).toFixed(1));
+  } else $('camReadout').textContent = '';
+  const chest = CHEST[S.posture], rows = cams.map(kc => {
+    const dist = Math.hypot(person.x - kc.x, person.y - kc.y, chest - kc.h) / 1000;
+    let tail = '—', cls = 'no', word = t('resOut');
+    if (sees(kc, person.x, person.y, chest)) {
+      const b = toCam(kc, person.x, person.y, 0), tp = toCam(kc, person.x, person.y, BODY[S.posture]);
+      if (b[2] > 50 && tp[2] > 50) {
+        const yb = (1 - b[1] / (b[2] * kc.tanV)) / 2 * 1080, yt = (1 - tp[1] / (tp[2] * kc.tanV)) / 2 * 1080;
+        tail = t('tall', Math.round(Math.abs(yb - yt)));
+        if (yb > 1080 || yt < 0) { cls = 'part'; word = t('resPart'); } else { cls = 'ok'; word = t('resIn'); }
+      } else { cls = 'part'; word = t('resIn'); }
+    }
+    return `<tr><td><span class="chip" style="background:${colourOf(kc)};width:20px;height:20px;font-size:11px">${kc.n}</span></td><td class="${cls}">${word}</td><td>${t('dist', dist.toFixed(1))}</td><td>${tail}</td></tr>`;
+  });
+  $('pp').innerHTML = rows.length ? rows.join('') : `<tr><td>${t('noCams')}</td></tr>`;
+}
+function renderTabs() {
+  $('tabs').innerHTML = cams.map(c => `<button class="tab ${c.n === selN ? 'sel' : ''}" data-n="${c.n}"><span class="chip" style="background:${colourOf(c)}">${c.n}</span>CAM ${c.n}<span class="x" data-del="${c.n}" title="${t('remove')}">×</span></button>`).join('');
+}
+function syncInputs() {
+  const c = sel(); if (!c) return;
+  $('fx').value = (c.x / 1000).toFixed(2); $('fy').value = (c.y / 1000).toFixed(2);
+  $('fh').value = c.h / 1000; $('fyaw').value = Math.round(c.yaw) % 360; $('fpitch').value = c.pitch; $('fzoom').value = c.zoom;
+}
+function refresh(o = {}) {
+  cams.forEach(prep);
+  const cov = computeCoverage(o.fast ? 2 : 1);
+  drawPlan(cov); drawStats(cov); drawView(); updateReadouts(cov);
+  if (o.list) renderTabs();
+  if (o.sync) syncInputs();
+  save();
+}
+function applyLang() {
+  document.documentElement.lang = lang; document.title = t('docTitle');
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.dataset.i18nTitle); });
+  $('foot').textContent = t('foot');
+  $('langJa').classList.toggle('on', lang === 'ja'); $('langEn').classList.toggle('on', lang === 'en');
+  drawLegend(); refresh({ list: true, sync: true });
+}
+
+// =====================================================================================================
+// Adding, moving, turning
+// =====================================================================================================
+const clampPt = (x, y) => [Math.max(ROOM.x0 - 400, Math.min(ROOM.x1 + 400, x)), Math.max(-300, Math.min(CORR_Y1, y))];
+function place(c, x, y) {
+  [x, y] = clampPt(x, y);
+  if (S.snap && Math.abs(y - WALL_Y) < 450) y = WALL_Y;
+  c.x = Math.round(x); c.y = Math.round(y);
+}
+function addCamera(x, y) {
+  if (cams.length >= 8) { toast(t('tMax')); return; }
+  let n = 1; while (cams.some(c => c.n === n)) n++;
+  const c = { n, x: 0, y: 0, h: 2700, yaw: 90, pitch: 35, zoom: 1 };
+  if (x === undefined) {                                        // a click on the tile: first free spot along the wall
+    const spots = [3000, 9000, 15000, 6000, 12000, 1500, 7500, 13500, 10500, 4500]; x = spots.find(sx => !cams.some(o => Math.abs(o.x - sx) < 1200 && o.y < 600)) || 9000; y = WALL_Y;
+  }
+  place(c, x, y);
+  c.yaw = c.y < 3000 ? 90 : 270;
+  cams.push(c); cams.sort((a, b) => a.n - b.n); selN = n;
+  refresh({ list: true, sync: true });
+}
+function hit(px, py) {
+  const c = sel();
+  if (c) { const a = c.yaw * D2R; if (Math.hypot(px - X(c.x + Math.cos(a) * AIM_MM), py - Y(c.y + Math.sin(a) * AIM_MM)) <= 11) return { t: 'aim', c }; }
+  if (Math.hypot(px - X(person.x), py - Y(person.y)) <= 11) return { t: 'person' };
+  for (let i = cams.length - 1; i >= 0; i--) if (Math.hypot(px - X(cams[i].x), py - Y(cams[i].y)) <= 14) return { t: 'cam', c: cams[i] };
+  return null;
+}
+let drag = null;
+const local = e => { const r = planCv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+planCv.addEventListener('pointerdown', e => {
+  const [px, py] = local(e), h = hit(px, py); if (!h) return;
+  drag = h; try { planCv.setPointerCapture(e.pointerId); } catch (err) { /* the drag still works without capture */ }
+  if (h.t === 'cam') { selN = h.c.n; refresh({ list: true, sync: true }); }
+});
+planCv.addEventListener('pointermove', e => {
+  const [px, py] = local(e);
+  if (!drag) { const h = hit(px, py); planCv.style.cursor = h ? (h.t === 'aim' ? 'crosshair' : 'grab') : 'default'; return; }
+  planCv.style.cursor = drag.t === 'aim' ? 'crosshair' : 'grabbing';
+  const mx = mmX(px), my = mmY(py);
+  if (drag.t === 'cam') place(drag.c, mx, my);
+  else if (drag.t === 'person') { [person.x, person.y] = clampPt(mx, my); person.x = Math.round(person.x); person.y = Math.round(person.y); }
+  else if (drag.t === 'aim') {
+    let yaw = Math.atan2(my - drag.c.y, mx - drag.c.x) / D2R; if (yaw < 0) yaw += 360;
+    drag.c.yaw = e.shiftKey ? Math.round(yaw / 15) * 15 % 360 : Math.round(yaw) % 360;
+  }
+  refresh({ sync: drag.t !== 'person', fast: true });
+});
+const endDrag = () => { if (drag) { drag = null; refresh({ list: true }); } };
+planCv.addEventListener('pointerup', endDrag); planCv.addEventListener('pointercancel', endDrag);
+
+$('tile').addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', 'camera'); e.dataTransfer.effectAllowed = 'copy'; });
+$('tile').addEventListener('click', () => addCamera());
+planCv.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+planCv.addEventListener('drop', e => { e.preventDefault(); const [px, py] = local(e); addCamera(mmX(px), mmY(py)); });
+$('reset').addEventListener('click', () => { cams = PROPOSED(); selN = 1; refresh({ list: true, sync: true }); toast(t('tReset')); });
+$('tabs').addEventListener('click', e => {
+  const del = e.target.closest('[data-del]'), pick = e.target.closest('[data-n]');
+  if (del) { cams = cams.filter(c => c.n !== +del.dataset.del); if (!sel()) selN = cams.length ? cams[0].n : 0; refresh({ list: true, sync: true }); }
+  else if (pick) { selN = +pick.dataset.n; refresh({ list: true, sync: true }); }
+});
+const bind = (id, fn) => $(id).addEventListener('input', () => { const c = sel(); if (!c) return; fn(c, parseFloat($(id).value)); refresh({ list: id === 'fx' }); });
+bind('fx', (c, v) => { if (!isNaN(v)) c.x = Math.round(v * 1000); });
+bind('fy', (c, v) => { if (!isNaN(v)) c.y = Math.round(v * 1000); });
+bind('fh', (c, v) => { c.h = Math.round(v * 1000); });
+bind('fyaw', (c, v) => { c.yaw = v; });
+bind('fpitch', (c, v) => { c.pitch = v; });
+bind('fzoom', (c, v) => { c.zoom = v; });
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const c = sel(); if (!c) return;
+  const step = e.shiftKey ? 500 : 100;
+  if (e.key === 'Delete' || e.key === 'Backspace') { cams = cams.filter(q => q !== c); selN = cams.length ? cams[0].n : 0; refresh({ list: true, sync: true }); }
+  else if (e.key.startsWith('Arrow')) {
+    e.preventDefault(); place(c, c.x + (e.key === 'ArrowRight' ? step : e.key === 'ArrowLeft' ? -step : 0), c.y + (e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0));
+    refresh({ list: true, sync: true });
+  }
+});
+document.querySelectorAll('input[name=plane]').forEach(r => r.addEventListener('change', () => { S.plane = +r.value; refresh(); }));
+document.querySelectorAll('input[name=posture]').forEach(r => r.addEventListener('change', () => { S.posture = r.value; refresh(); }));
+$('oSolid').addEventListener('change', () => { S.solid = $('oSolid').checked; refresh(); });
+$('oGaps').addEventListener('change', () => { S.showGaps = $('oGaps').checked; refresh(); });
+$('oSnap').addEventListener('change', () => { S.snap = $('oSnap').checked; save(); });
+$('fwall').addEventListener('input', () => { const v = parseFloat($('fwall').value); if (v >= 2) { S.wallH = Math.round(v * 1000); buildSolids(); refresh(); } });
+$('langJa').addEventListener('click', () => { lang = 'ja'; applyLang(); });
+$('langEn').addEventListener('click', () => { lang = 'en'; applyLang(); });
+
+function toast(msg) { const el = $('toast'); el.textContent = msg; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), 1800); }
+$('save').addEventListener('click', () => {
+  planCv.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'camera-coverage-plan.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); toast(t('tSaved')); });
+});
+$('copy').addEventListener('click', async () => {
+  const text = cams.map(c => t('describe', c)).join('\n');
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  toast(t('tCopied'));
+});
+
+// start
+$('oSolid').checked = S.solid; $('oGaps').checked = S.showGaps; $('oSnap').checked = S.snap; $('fwall').value = S.wallH / 1000;
+document.querySelectorAll('input[name=plane]').forEach(r => { r.checked = (+r.value === S.plane); });
+document.querySelectorAll('input[name=posture]').forEach(r => { r.checked = (r.value === S.posture); });
+if (!sel() && cams.length) selN = cams[0].n;
+buildSolids();
+new ResizeObserver(() => { sizePlan(); refresh(); }).observe(planCv.parentElement);
+new ResizeObserver(() => refresh()).observe(viewCv.parentElement);
+sizePlan(); applyLang();
+window.__tool = { get cams() { return cams; }, get S() { return S; }, get lang() { return lang; }, refresh, addCamera, computeCoverage, applyLang, setLang(l) { lang = l; applyLang(); }, buildSolids };   // for testing
+})();
+</script>
+</body>
+</html>
