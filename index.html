@@ -291,10 +291,11 @@ const AIM_MM = 1500, CELL = 100;
 const TAN_D = Math.tan(39 * D2R), DIAG = Math.hypot(16, 9);
 const TAN_H0 = TAN_D * 16 / DIAG, TAN_V0 = TAN_D * 9 / DIAG;
 
-const PROPOSED = () => [
-  { n: 1, x: 3000,  y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
-  { n: 2, x: 9000,  y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
-  { n: 3, x: 15000, y: WALL_Y, h: 2700, yaw: 90, pitch: 35, zoom: 1 },
+const PROPOSED = () => [                                       // the proposed layout: "Reset to proposed" and the first load use these
+  { n: 1, x: 5000,  y: 4870, h: 2800, yaw: 238, pitch: 29, zoom: 1 },
+  { n: 2, x: 15000, y: 1110, h: 2700, yaw: 162, pitch: 27, zoom: 1 },
+  { n: 3, x: 10700, y: 4670, h: 2700, yaw: 336, pitch: 24, zoom: 1 },
+  { n: 4, x: 1900,  y: 5130, h: 2700, yaw: 339, pitch: 44, zoom: 1 },
 ];
 let cams = PROPOSED(), selN = 1;
 let person = { x: 9000, y: 3200 };
