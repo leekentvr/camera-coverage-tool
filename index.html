@@ -291,11 +291,15 @@ const AIM_MM = 1500, CELL = 100;
 const TAN_D = Math.tan(39 * D2R), DIAG = Math.hypot(16, 9);
 const TAN_H0 = TAN_D * 16 / DIAG, TAN_V0 = TAN_D * 9 / DIAG;
 
-const PROPOSED = () => [                                       // the proposed layout: "Reset to proposed" and the first load use these
-  { n: 1, x: 5000,  y: 4870, h: 2800, yaw: 238, pitch: 29, zoom: 1 },
-  { n: 2, x: 15000, y: 1110, h: 2700, yaw: 162, pitch: 27, zoom: 1 },
+// The proposed layout, numbered left to right. "Reset to proposed" and the first load use it.
+// Bump PROPOSAL whenever you change it: a layout saved in someone's browser is only restored if it was
+// made against the current proposal, so a new proposal is never hidden behind an old saved one.
+const PROPOSAL = 2;
+const PROPOSED = () => [
+  { n: 1, x: 1900,  y: 5130, h: 2700, yaw: 339, pitch: 44, zoom: 1 },
+  { n: 2, x: 5000,  y: 4870, h: 2800, yaw: 238, pitch: 29, zoom: 1 },
   { n: 3, x: 10700, y: 4670, h: 2700, yaw: 336, pitch: 24, zoom: 1 },
-  { n: 4, x: 1900,  y: 5130, h: 2700, yaw: 339, pitch: 44, zoom: 1 },
+  { n: 4, x: 15000, y: 1110, h: 2700, yaw: 162, pitch: 27, zoom: 1 },
 ];
 let cams = PROPOSED(), selN = 1;
 let person = { x: 9000, y: 3200 };
@@ -304,12 +308,13 @@ const S = { plane: 1050, posture: 'sitting', solid: true, showGaps: true, snap: 
 try {
   const saved = JSON.parse(localStorage.getItem('cameraCoverage.v1') || 'null');
   if (saved) {
-    if (Array.isArray(saved.cams) && saved.cams.length) { cams = saved.cams; selN = saved.selN || cams[0].n; person = saved.person || person; Object.assign(S, saved.S || {}); }
+    Object.assign(S, saved.S || {});
     if (saved.lang === 'ja' || saved.lang === 'en') lang = saved.lang;
+    if (saved.proposal === PROPOSAL && Array.isArray(saved.cams) && saved.cams.length) { cams = saved.cams; selN = saved.selN || cams[0].n; person = saved.person || person; }
   }
 } catch (e) { /* storage may be blocked; everything still works */ }
 try { const q = new URLSearchParams(location.search).get('lang'); if (q === 'ja' || q === 'en') lang = q; } catch (e) {}
-const save = () => { try { localStorage.setItem('cameraCoverage.v1', JSON.stringify({ cams, selN, person, S, lang })); } catch (e) {} };
+const save = () => { try { localStorage.setItem('cameraCoverage.v1', JSON.stringify({ proposal: PROPOSAL, cams, selN, person, S, lang })); } catch (e) {} };
 
 const $ = id => document.getElementById(id);
 const sel = () => cams.find(c => c.n === selN) || null;
